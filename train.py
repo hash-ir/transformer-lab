@@ -1,15 +1,19 @@
 import torch
-from models import BigramLanguageModel
+import torch.nn as nn
+from models import Transformer
 
 # data and model configuration 
 split = 0.9
-batch_size = 32  
-block_size = 8 
+batch_size = 64 
+block_size = 256
 max_iters = 5000
 eval_iters = 200  
 eval_interval = 500 
-learning_rate = 1e-3
-n_embed = 32
+learning_rate = 3e-4
+n_embed = 384
+n_head = 6
+n_layer = 6
+dropout = 0.2
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.manual_seed(1337)
 
@@ -29,7 +33,7 @@ n = int(split * len(data))
 train_data = data[:n]
 val_data = data[n:]
 
-def get_batch(split):
+def get_batch(train_mode: bool):
     """Get batched data based on the split i.e 
     training or validation
 
@@ -39,7 +43,7 @@ def get_batch(split):
     Returns:
         tuple: text input and labels
     """    
-    data = train_data if split == 'train' else val_data
+    data = train_data if train_mode else val_data
     ix = torch.randint(len(data)-block_size, (batch_size,))
     x = torch.stack([data[i:i+block_size] for i in ix])
     y = torch.stack([data[i+1:i+block_size+1] for i in ix])
@@ -48,7 +52,7 @@ def get_batch(split):
 
 
 @torch.no_grad()
-def estimate_loss():
+def estimate_loss(m: nn.Module):
     """Compute loss for training and validation
     data
 
@@ -56,12 +60,12 @@ def estimate_loss():
         dict: losses (training and validation)
     """    
     out = {}
-    model.eval()
+    m.eval()
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
-            _, loss = model(X, Y)
+            _, loss = m(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -69,7 +73,7 @@ def estimate_loss():
     return out
 
 
-model = BigramLanguageModel(vocab_size, block_size, n_embed, n_embed)
+model = Transformer(vocab_size, block_size, n_head, n_embed, n_layer)
 model = model.to(device)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
@@ -77,7 +81,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 for i in range(max_iters):
 
     if i % eval_interval == 0:
-        losses = estimate_loss()
+        losses = estimate_loss(model)
         print(f"step {i}: train loss {losses['train']:.4f} val loss {losses['val']:.4f}")
 
     xb, yb = get_batch('train')
