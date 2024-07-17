@@ -19,7 +19,7 @@ class Head(nn.Module):
 
     def forward(self, x):
         _, T, _ = x.shape
-        q = self.key(x) # query
+        q = self.query(x) # query
         k = self.key(x) # key
         # compute attention scores ("affinities")
         wei = q @ k.transpose(-2, -1) * self.head_size**-0.5  # (B, T, C) @ (B, C, T) -> (B, T, T)

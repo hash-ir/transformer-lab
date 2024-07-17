@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models import Transformer
+from models import Decoder
 
 # data and model configuration 
 split = 0.9
@@ -73,7 +73,7 @@ def estimate_loss(m: nn.Module):
     return out
 
 
-model = Transformer(vocab_size, block_size, n_head, n_embed, n_layer)
+model = Decoder(vocab_size, block_size, n_head, n_embed, n_layer)
 model = model.to(device)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
