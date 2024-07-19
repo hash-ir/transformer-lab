@@ -1,12 +1,22 @@
+"""
+Components of the Transformer model.
+References:
+1) The nanoGPT implementation by Andrej Karpathy:
+https://github.com/karpathy/nanoGPT/blob/master/model.py
+2) huggingface/transformers PyTorch implementation:
+https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py 
+"""
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class Head(nn.Module):
-    """ Single self-attention head """
+    """Single self-attention head"""
 
     def __init__(self, n_embed, block_size, head_size, dropout=0.2):
         super().__init__()
@@ -34,11 +44,11 @@ class Head(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    """ Multiple heads of self-attention in parallel """ 
+    """Multiple heads of self-attention in parallel""" 
 
-    def __init__(self, n_heads, n_embed, block_size, head_size, dropout=0.2) -> None:
+    def __init__(self, n_head, n_embed, block_size, head_size, dropout=0.2) -> None:
         super().__init__()
-        self.heads = nn.ModuleList([Head(n_embed, block_size, head_size) for _ in range(n_heads)])
+        self.heads = nn.ModuleList([Head(n_embed, block_size, head_size) for _ in range(n_head)])
         self.proj = nn.Linear(n_embed, n_embed)
         self.dropout = nn.Dropout(dropout)
 
@@ -46,11 +56,54 @@ class MultiHeadAttention(nn.Module):
         x = torch.cat([h(x) for h in self.heads], dim=-1) # (B, T, n_embed (=head_size * num_heads))
         x = self.proj(x)
         x = self.dropout(x)
-        return x    
+        return x
+    
+
+class SelfAttention(nn.Module):
+    """
+    Similar to `MultiHeadAttention` but applies 
+    multiple heads in parallel.
+    """
+    def __init__(self, n_head, n_embed, block_size, dropout=0.2) -> None:
+        super().__init__()
+        # key, query, value projections for all heads, but in a batch
+        self.attn = nn.Linear(n_embed, 3 * n_embed, bias=False)
+        # output projection
+        self.proj = nn.Linear(n_embed, n_embed)
+        self.n_head = n_head
+        self.n_embed = n_embed
+        self.dropout = nn.Dropout(dropout)
+        # causal mask to ensure that attention is only 
+        # applied to the left in the input sequence 
+        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))
+                             .view(1, 1, block_size, block_size))
+     
+    def forward(self, x):
+        # batch size, sequence length (block_size), embedding dim (n_embed)
+        B, T, C = x.size() 
+
+        # calculate query, key, values for all heads in batch 
+        # and move head forward to be the batch dim
+        q, k, v = self.attn(x).split(self.n_embed, dim=-1)
+        # reshape q, k, v -> (batch size, n_head, block_size, head_size)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) 
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+        att = F.softmax(att, dim=-1)
+        # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        out = att @ v
+        # re-assemble all head outputs side by side
+        out = out.transpose(1, 2).contiguous().view(B, T, C)
+        out = self.droout(self.proj(out))
+
+        return out
 
 
 class FeedForward(nn.Module):
-    """ Multi-layer perceptron """
+    """Two-layer feed-forward network"""
 
     def __init__(self, n_embed, dropout=0.2) -> None:
         super().__init__()
@@ -64,8 +117,9 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+
 class LayerNorm(nn.Module):
-    """ Implemention of LayerNorm: https://arxiv.org/abs/1607.06450 """
+    """Implemention of LayerNorm: https://arxiv.org/abs/1607.06450"""
 
     def __init__(self, dim, eps=1e-5) -> None:
         super().__init__()
@@ -80,28 +134,28 @@ class LayerNorm(nn.Module):
         x = self.gamma * xhat + self.beta
         return x
 
+
 class Block(nn.Module):
-    """Transformer block: connection followed by computation""" 
+    """Transformer block: communication followed by computation""" 
 
     def __init__(self, block_size, n_embed, n_head) -> None:
         super().__init__()
-        head_size = n_embed // n_head
-        self.sa = MultiHeadAttention(n_head, n_embed, block_size, head_size)
-        self.ffwd = FeedForward(n_embed)
         self.ln1 = LayerNorm(n_embed)
+        self.sa = SelfAttention(n_head, n_embed, block_size)
         self.ln2 = LayerNorm(n_embed)
+        self.ffwd = FeedForward(n_embed)
 
     def forward(self, x):
         x = x + self.sa(self.ln1(x))
         x = x + self.ffwd(self.ln2(x))
         return x
 
+
 class Decoder(nn.Module):
     """
     The decoder block of Transformer,
     based on https://arxiv.org/pdf/1706.03762
-    """   
-
+    """
     def __init__(self, vocab_size, block_size, n_head, n_embed, n_layer):
         super().__init__()
         self.block_size = block_size
@@ -131,8 +185,8 @@ class Decoder(nn.Module):
             B, T, C = logits.shape
             logits = logits.view(B*T, C)
             targets = targets.view(B*T)
-            loss = F.cross_entropy(logits, targets)
-            
+            loss = F.cross_entropy(logits, targets)  
+        
         return logits, loss
 
     @torch.no_grad()
@@ -149,3 +203,4 @@ class Decoder(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
 
         return idx
+    
