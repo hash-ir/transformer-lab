@@ -16,7 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Head(nn.Module):
-    """Single self-attention head"""
+    """Single self-attention head."""
 
     def __init__(self, n_embed, block_size, head_size, dropout=0.2):
         super().__init__()
@@ -44,7 +44,7 @@ class Head(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    """Multiple heads of self-attention in parallel""" 
+    """Multiple heads of self-attention.""" 
 
     def __init__(self, n_head, n_embed, block_size, head_size, dropout=0.2) -> None:
         super().__init__()
@@ -103,7 +103,7 @@ class SelfAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    """Two-layer feed-forward network"""
+    """Two-layer feed-forward network."""
 
     def __init__(self, n_embed, dropout=0.2) -> None:
         super().__init__()
@@ -119,7 +119,7 @@ class FeedForward(nn.Module):
 
 
 class LayerNorm(nn.Module):
-    """Implemention of LayerNorm: https://arxiv.org/abs/1607.06450"""
+    """Implemention of LayerNorm: https://arxiv.org/abs/1607.06450."""
 
     def __init__(self, dim, eps=1e-5) -> None:
         super().__init__()
@@ -136,7 +136,7 @@ class LayerNorm(nn.Module):
 
 
 class Block(nn.Module):
-    """Transformer block: communication followed by computation""" 
+    """Transformer block: communication followed by computation.""" 
 
     def __init__(self, block_size, n_embed, n_head) -> None:
         super().__init__()
@@ -154,7 +154,7 @@ class Block(nn.Module):
 class Decoder(nn.Module):
     """
     The decoder block of Transformer,
-    based on https://arxiv.org/pdf/1706.03762
+    based on https://arxiv.org/pdf/1706.03762.
     """
     def __init__(self, vocab_size, block_size, n_head, n_embed, n_layer):
         super().__init__()
