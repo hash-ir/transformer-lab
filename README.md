@@ -4,12 +4,11 @@ models from scratch. Inspired by Andrej Karpathy's famous "Let's Build GPT" [tut
 
 ## Features ✨
 - Decoder implementation of the [Transformer](https://arxiv.org/pdf/1706.03762)
-    * Single- and multi-head self-attention
+    * Multi-head self-attention (parallel processing)
     * The Transformer block: connection followed by computation
     * Text generator based on a context
 
 ## Roadmap 🎯
-- Parallel processing of attention heads
 - Custom dataset training
 - Pretraining and fine-tuning experiments
 - Implementation of "Encoder" block
