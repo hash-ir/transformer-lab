@@ -1,14 +1,19 @@
+import os
+import requests
+
 import torch
 import torch.nn as nn
-from models import Decoder
 
-# data and model configuration 
+from models import Decoder
+from tokenizer import encode, decode
+
+# data and model configuration
 split = 0.9
-batch_size = 64 
+batch_size = 64
 block_size = 256
 max_iters = 5000
-eval_iters = 200  
-eval_interval = 500 
+eval_iters = 200
+eval_interval = 500
 learning_rate = 3e-4
 n_embed = 384
 n_head = 6
@@ -17,24 +22,31 @@ dropout = 0.2
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.manual_seed(1337)
 
-with open("input.txt", "r", encoding='utf-8') as f:
+input_file_path = os.path.join(os.path.dirname(__file__), "input.txt")
+if not os.path.exists(input_file_path):
+    print("Downloading tiny shakespeare...")
+    data_url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
+    with open(input_file_path, "w", encoding="utf-8") as f:
+        f.write(requests.get(data_url).text)
+
+with open(input_file_path, "r", encoding="utf-8") as f:
     text = f.read()
 
 chars = sorted(set(text))
 vocab_size = len(chars)
 # create a mapping from characters to integers
-stoi = {ch:i for i, ch in enumerate(chars)}
-itos = {i:ch for i, ch in enumerate(chars)}
-encode = lambda s: [stoi[c] for c in s]
-decode = lambda s: ''.join([itos[c] for c in s])
+stoi = {ch: i for i, ch in enumerate(chars)}
+itos = {i: ch for i, ch in enumerate(chars)}
 
-data = torch.tensor(encode(text), dtype=torch.long)
+tokens, merges = encode(text, return_merge_dict=True)
+data = torch.tensor(tokens, dtype=torch.long)
 n = int(split * len(data))
 train_data = data[:n]
 val_data = data[n:]
 
+
 def get_batch(train_mode: bool):
-    """Get batched data based on the split i.e 
+    """Get batched data based on the split i.e
     training or validation
 
     Args:
@@ -42,12 +54,12 @@ def get_batch(train_mode: bool):
 
     Returns:
         tuple: text input and labels
-    """    
+    """
     data = train_data if train_mode else val_data
-    ix = torch.randint(len(data)-block_size, (batch_size,))
-    x = torch.stack([data[i:i+block_size] for i in ix])
-    y = torch.stack([data[i+1:i+block_size+1] for i in ix])
-    
+    ix = torch.randint(len(data) - block_size, (batch_size,))
+    x = torch.stack([data[i : i + block_size] for i in ix])
+    y = torch.stack([data[i + 1 : i + block_size + 1] for i in ix])
+
     return x, y
 
 
@@ -58,10 +70,10 @@ def estimate_loss(m: nn.Module):
 
     Returns:
         dict: losses (training and validation)
-    """    
+    """
     out = {}
     m.eval()
-    for split in ['train', 'val']:
+    for split in ["train", "val"]:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
@@ -79,12 +91,13 @@ model = model.to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
 for i in range(max_iters):
-
     if i % eval_interval == 0:
         losses = estimate_loss(model)
-        print(f"step {i}: train loss {losses['train']:.4f} val loss {losses['val']:.4f}")
+        print(
+            f"step {i}: train loss {losses['train']:.4f} val loss {losses['val']:.4f}"
+        )
 
-    xb, yb = get_batch('train')
+    xb, yb = get_batch("train")
 
     # evaluate the loss
     logits, loss = model(xb, yb)
@@ -94,4 +107,4 @@ for i in range(max_iters):
 
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(model.generate(context, max_new_tokens=500)[0].tolist()))
+print(decode(model.generate(context, max_new_tokens=500)[0].tolist(), merges=merges))
