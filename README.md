@@ -7,6 +7,7 @@ models from scratch. Inspired by Andrej Karpathy's famous "Let's Build GPT" [tut
     * Multi-head self-attention (parallel processing)
     * The Transformer block: connection followed by computation
     * Text generator based on a context
+- Byte Pair Encoding (BPE) algorithm for tokenization, popularized by the [GPT-2 paper](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)
 
 ## Roadmap 🎯
 - Custom dataset training
