@@ -10,18 +10,20 @@ from tokenizer import encode, decode
 # data and model configuration
 split = 0.9
 batch_size = 64
-block_size = 256
+block_size = 128
 max_iters = 5000
 eval_iters = 200
 eval_interval = 500
 learning_rate = 3e-4
-n_embed = 384
-n_head = 6
+n_embed = 64
+n_head = 2
 n_layer = 6
 dropout = 0.2
+num_merges = 20  # number of merges of multiple byte-pairs
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.manual_seed(1337)
 
+# Get data
 input_file_path = os.path.join(os.path.dirname(__file__), "input.txt")
 if not os.path.exists(input_file_path):
     print("Downloading tiny shakespeare...")
@@ -32,13 +34,9 @@ if not os.path.exists(input_file_path):
 with open(input_file_path, "r", encoding="utf-8") as f:
     text = f.read()
 
-chars = sorted(set(text))
-vocab_size = len(chars)
-# create a mapping from characters to integers
-stoi = {ch: i for i, ch in enumerate(chars)}
-itos = {i: ch for i, ch in enumerate(chars)}
-
+# encode text to tokens and prepare training data
 tokens, merges = encode(text, return_merge_dict=True)
+vocab_size = 256 + num_merges  # 0..255 unicode tokens plus additional merged tokens
 data = torch.tensor(tokens, dtype=torch.long)
 n = int(split * len(data))
 train_data = data[:n]
@@ -46,6 +44,7 @@ val_data = data[n:]
 
 
 def get_batch(train_mode: bool):
+
     """Get batched data based on the split i.e
     training or validation
 
