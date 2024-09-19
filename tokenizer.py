@@ -23,39 +23,41 @@ def merge(ids, pair, idx):
     return new_ids
 
 
-def encode(text, num_merges=20, return_merge_dict=False, verbose=False):
-    tokens = text.encode("utf-8")  # raw bytes
-    tokens = list(map(int, tokens))  # convert to list of integers
-    ids = list(tokens)  # create a copy of tokens
-    merges = OrderedDict()  # store a mapping of merges (int, int) -> int
-    for i in range(num_merges):
-        counts = get_byte_pair_counts(ids)
-        pair = max(counts, key=counts.get)
-        idx = 256 + i  # create new token for every merge step
-        if verbose:
-            print(f"Merging {pair} into a new token {idx}")
-        ids = merge(ids, pair, idx)
-        merges[pair] = idx
+class Tokenizer:
+    def __init__(self, num_merges=20, verbose=False):
+        self.num_merges = num_merges
+        self.merges = {}
+        self.verbose = verbose
 
-    if return_merge_dict:
-        return ids, merges
+    def encode(self, text):
+        tokens = text.encode("utf-8")  # raw bytes
+        tokens = list(map(int, tokens))  # convert to list of integers
+        ids = list(tokens)  # create a copy of tokens
+        self.merges = OrderedDict()  # store a mapping of merges (int, int) -> int
+        for i in range(self.num_merges):
+            counts = get_byte_pair_counts(ids)
+            pair = max(counts, key=counts.get)
+            idx = 256 + i  # create new token for every merge step
+            if self.verbose:
+                print(f"Merging {pair} into a new token {idx}")
+            ids = merge(ids, pair, idx)
+            self.merges[pair] = idx
 
-    return ids
+        return ids
 
+    def decode(self, ids):
+        vocab = {idx: bytes([idx]) for idx in range(256)}  # original vocabulary
+        # The iteration of items should be in the order of
+        # their insertion. This is the default behavior in Python 3
+        # but we use an OrderedDict explicitly here
+        for (p0, p1), idx in self.merges.items():
+            vocab[idx] = vocab[p0] + vocab[p1]
 
-def decode(ids, merges):
-    vocab = {idx: bytes([idx]) for idx in range(256)}  # original vocabulary
-    # The iteration of items should be in the order of
-    # their insertion. This is the default behavior in Python 3
-    # but we use an OrderedDict explicitly here
-    for (p0, p1), idx in merges.items():
-        vocab[idx] = vocab[p0] + vocab[p1]
-
-    tokens = b"".join(vocab[idx] for idx in ids)
-    # handle UnicodeDecodeError by replacing the invalid 
-    # start byte to conform to utf-8 format
-    text = tokens.decode("utf-8", errors='replace') 
-    return text
+        tokens = b"".join(vocab[idx] for idx in ids)
+        # handle UnicodeDecodeError by replacing the invalid
+        # start byte to conform to utf-8 format
+        text = tokens.decode("utf-8", errors="replace")
+        return text
 
 
 if __name__ == "__main__":
@@ -79,6 +81,7 @@ if __name__ == "__main__":
     layout/shaping/rendering, or localization in detail—those are 
     separate issues, beyond my scope (and knowledge) here."""
 
-    tokens, merges = encode(text, return_merge_dict=True, verbose=True)
-    text2 = decode(tokens, merges)
+    t = Tokenizer(verbose=True)
+    tokens = t.encode(text)
+    text2 = t.decode(tokens)
     assert text2 == text
